@@ -17,8 +17,6 @@ limitations under the License.
 package adapter
 
 import (
-	"bytes"
-	"context"
 	"errors"
 	"fmt"
 	"io/ioutil"
@@ -32,7 +30,6 @@ import (
 
 	"github.com/google/go-cmp/cmp"
 
-	cehttp "github.com/cloudevents/sdk-go/pkg/cloudevents/transport/http"
 	gh "gopkg.in/go-playground/webhooks.v5/github"
 )
 
@@ -50,9 +47,6 @@ type testCase struct {
 	// name is a descriptive name for this test suitable as a first argument to t.Run()
 	name string
 
-	// sink the response from the fake sink
-	sink func(http.ResponseWriter, *http.Request)
-
 	// wantErr is true when we expect the test to return an error.
 	wantErr bool
 
@@ -68,12 +62,6 @@ type testCase struct {
 
 	// eventID is the GitHub eventID
 	eventID string
-
-	// wantEventType is the expected CloudEvent EventType
-	wantCloudEventType string
-
-	// wantCloudEventSubject is the expected CloudEvent subject
-	wantCloudEventSubject string
 }
 
 var testCases = []testCase{
@@ -85,8 +73,7 @@ var testCases = []testCase{
 			pl.Repository.ID = id
 			return pl
 		}(),
-		eventType:             "check_suite",
-		wantCloudEventSubject: testSubject,
+		eventType: "check_suite",
 	}, {
 		name: "valid commit_comment",
 		payload: func() interface{} {
@@ -94,8 +81,7 @@ var testCases = []testCase{
 			pl.Comment.HTMLURL = fmt.Sprintf("http://test/%s", testSubject)
 			return pl
 		}(),
-		eventType:             "commit_comment",
-		wantCloudEventSubject: testSubject,
+		eventType: "commit_comment",
 	}, {
 		name: "valid create",
 		payload: func() interface{} {
@@ -103,8 +89,7 @@ var testCases = []testCase{
 			pl.RefType = testSubject
 			return pl
 		}(),
-		eventType:             "create",
-		wantCloudEventSubject: testSubject,
+		eventType: "create",
 	}, {
 		name: "valid delete",
 		payload: func() interface{} {
@@ -112,8 +97,7 @@ var testCases = []testCase{
 			pl.RefType = testSubject
 			return pl
 		}(),
-		eventType:             "delete",
-		wantCloudEventSubject: testSubject,
+		eventType: "delete",
 	}, {
 		name: "valid deployment",
 		payload: func() interface{} {
@@ -122,8 +106,7 @@ var testCases = []testCase{
 			pl.Deployment.ID = subject
 			return pl
 		}(),
-		eventType:             "deployment",
-		wantCloudEventSubject: testSubject,
+		eventType: "deployment",
 	}, {
 		name: "valid deployment_status",
 		payload: func() interface{} {
@@ -132,8 +115,7 @@ var testCases = []testCase{
 			pl.Deployment.ID = subject
 			return pl
 		}(),
-		eventType:             "deployment_status",
-		wantCloudEventSubject: testSubject,
+		eventType: "deployment_status",
 	}, {
 		name: "valid fork",
 		payload: func() interface{} {
@@ -142,8 +124,7 @@ var testCases = []testCase{
 			pl.Forkee.ID = subject
 			return pl
 		}(),
-		eventType:             "fork",
-		wantCloudEventSubject: testSubject,
+		eventType: "fork",
 	}, {
 		name: "valid gollum",
 		payload: func() interface{} {
@@ -151,8 +132,7 @@ var testCases = []testCase{
 			// Leaving the subject as empty.
 			return pl
 		}(),
-		eventType:             "gollum",
-		wantCloudEventSubject: "",
+		eventType: "gollum",
 	}, {
 		name: "valid installation",
 		payload: func() interface{} {
@@ -161,8 +141,7 @@ var testCases = []testCase{
 			pl.Installation.ID = subject
 			return pl
 		}(),
-		eventType:             "installation",
-		wantCloudEventSubject: testSubject,
+		eventType: "installation",
 	}, {
 		name: "valid integration_installation",
 		payload: func() interface{} {
@@ -171,8 +150,7 @@ var testCases = []testCase{
 			pl.Installation.ID = subject
 			return pl
 		}(),
-		eventType:             "integration_installation",
-		wantCloudEventSubject: testSubject,
+		eventType: "integration_installation",
 	}, {
 		name: "valid issue_comment",
 		payload: func() interface{} {
@@ -180,8 +158,7 @@ var testCases = []testCase{
 			pl.Comment.HTMLURL = fmt.Sprintf("http://test/%s", testSubject)
 			return pl
 		}(),
-		eventType:             "issue_comment",
-		wantCloudEventSubject: testSubject,
+		eventType: "issue_comment",
 	}, {
 		name: "valid issues",
 		payload: func() interface{} {
@@ -190,8 +167,7 @@ var testCases = []testCase{
 			pl.Issue.Number = subject
 			return pl
 		}(),
-		eventType:             "issues",
-		wantCloudEventSubject: testSubject,
+		eventType: "issues",
 	}, {
 		name: "valid label",
 		payload: func() interface{} {
@@ -199,8 +175,7 @@ var testCases = []testCase{
 			pl.Label.Name = testSubject
 			return pl
 		}(),
-		eventType:             "label",
-		wantCloudEventSubject: testSubject,
+		eventType: "label",
 	}, {
 		name: "valid member",
 		payload: func() interface{} {
@@ -209,8 +184,7 @@ var testCases = []testCase{
 			pl.Member.ID = subject
 			return pl
 		}(),
-		eventType:             "member",
-		wantCloudEventSubject: testSubject,
+		eventType: "member",
 	}, {
 		name: "valid membership",
 		payload: func() interface{} {
@@ -219,8 +193,7 @@ var testCases = []testCase{
 			pl.Member.ID = subject
 			return pl
 		}(),
-		eventType:             "membership",
-		wantCloudEventSubject: testSubject,
+		eventType: "membership",
 	}, {
 		name: "valid milestone",
 		payload: func() interface{} {
@@ -229,8 +202,7 @@ var testCases = []testCase{
 			pl.Milestone.Number = subject
 			return pl
 		}(),
-		eventType:             "milestone",
-		wantCloudEventSubject: testSubject,
+		eventType: "milestone",
 	}, {
 		name: "valid organization",
 		payload: func() interface{} {
@@ -238,8 +210,7 @@ var testCases = []testCase{
 			pl.Action = testSubject
 			return pl
 		}(),
-		eventType:             "organization",
-		wantCloudEventSubject: testSubject,
+		eventType: "organization",
 	}, {
 		name: "valid org_block",
 		payload: func() interface{} {
@@ -247,8 +218,7 @@ var testCases = []testCase{
 			pl.Action = testSubject
 			return pl
 		}(),
-		eventType:             "org_block",
-		wantCloudEventSubject: testSubject,
+		eventType: "org_block",
 	}, {
 		name: "valid page_build",
 		payload: func() interface{} {
@@ -257,8 +227,7 @@ var testCases = []testCase{
 			pl.ID = subject
 			return pl
 		}(),
-		eventType:             "page_build",
-		wantCloudEventSubject: testSubject,
+		eventType: "page_build",
 	}, {
 		name: "valid ping",
 		payload: func() interface{} {
@@ -267,8 +236,7 @@ var testCases = []testCase{
 			pl.HookID = subject
 			return pl
 		}(),
-		eventType:             "ping",
-		wantCloudEventSubject: testSubject,
+		eventType: "ping",
 	}, {
 		name: "valid project_card",
 		payload: func() interface{} {
@@ -276,8 +244,7 @@ var testCases = []testCase{
 			pl.Action = testSubject
 			return pl
 		}(),
-		eventType:             "project_card",
-		wantCloudEventSubject: testSubject,
+		eventType: "project_card",
 	}, {
 		name: "valid project_column",
 		payload: func() interface{} {
@@ -285,8 +252,7 @@ var testCases = []testCase{
 			pl.Action = testSubject
 			return pl
 		}(),
-		eventType:             "project_column",
-		wantCloudEventSubject: testSubject,
+		eventType: "project_column",
 	}, {
 		name: "valid project",
 		payload: func() interface{} {
@@ -294,8 +260,7 @@ var testCases = []testCase{
 			pl.Action = testSubject
 			return pl
 		}(),
-		eventType:             "project",
-		wantCloudEventSubject: testSubject,
+		eventType: "project",
 	}, {
 		name: "valid public",
 		payload: func() interface{} {
@@ -304,8 +269,7 @@ var testCases = []testCase{
 			pl.Repository.ID = subject
 			return pl
 		}(),
-		eventType:             "public",
-		wantCloudEventSubject: testSubject,
+		eventType: "public",
 	}, {
 		name: "valid pull_request",
 		payload: func() interface{} {
@@ -314,9 +278,7 @@ var testCases = []testCase{
 			pl.PullRequest.Number = subject
 			return pl
 		}(),
-		eventType:             "pull_request",
-		wantCloudEventType:    "dev.knative.source.github.pull_request",
-		wantCloudEventSubject: testSubject,
+		eventType: "pull_request",
 	}, {
 		name: "valid pull_request_review",
 		payload: func() interface{} {
@@ -325,8 +287,7 @@ var testCases = []testCase{
 			pl.Review.ID = subject
 			return pl
 		}(),
-		eventType:             "pull_request_review",
-		wantCloudEventSubject: testSubject,
+		eventType: "pull_request_review",
 	}, {
 		name: "valid pull_request_review_comment",
 		payload: func() interface{} {
@@ -335,8 +296,7 @@ var testCases = []testCase{
 			pl.Comment.ID = subject
 			return pl
 		}(),
-		eventType:             "pull_request_review_comment",
-		wantCloudEventSubject: testSubject,
+		eventType: "pull_request_review_comment",
 	}, {
 		name: "valid push",
 		payload: func() interface{} {
@@ -344,8 +304,7 @@ var testCases = []testCase{
 			pl.Compare = fmt.Sprintf("http://test/%s", testSubject)
 			return pl
 		}(),
-		eventType:             "push",
-		wantCloudEventSubject: testSubject,
+		eventType: "push",
 	}, {
 		name: "valid release",
 		payload: func() interface{} {
@@ -353,8 +312,7 @@ var testCases = []testCase{
 			pl.Release.TagName = testSubject
 			return pl
 		}(),
-		eventType:             "release",
-		wantCloudEventSubject: testSubject,
+		eventType: "release",
 	}, {
 		name: "valid repository",
 		payload: func() interface{} {
@@ -363,8 +321,7 @@ var testCases = []testCase{
 			pl.Repository.ID = subject
 			return pl
 		}(),
-		eventType:             "repository",
-		wantCloudEventSubject: testSubject,
+		eventType: "repository",
 	}, {
 		name: "valid status",
 		payload: func() interface{} {
@@ -372,8 +329,7 @@ var testCases = []testCase{
 			pl.Sha = testSubject
 			return pl
 		}(),
-		eventType:             "status",
-		wantCloudEventSubject: testSubject,
+		eventType: "status",
 	}, {
 		name: "valid team",
 		payload: func() interface{} {
@@ -382,8 +338,7 @@ var testCases = []testCase{
 			pl.Team.ID = subject
 			return pl
 		}(),
-		eventType:             "team",
-		wantCloudEventSubject: testSubject,
+		eventType: "team",
 	}, {
 		name: "valid team_add",
 		payload: func() interface{} {
@@ -392,8 +347,7 @@ var testCases = []testCase{
 			pl.Repository.ID = subject
 			return pl
 		}(),
-		eventType:             "team_add",
-		wantCloudEventSubject: testSubject,
+		eventType: "team_add",
 	}, {
 		name: "valid watch",
 		payload: func() interface{} {
@@ -402,18 +356,8 @@ var testCases = []testCase{
 			pl.Repository.ID = subject
 			return pl
 		}(),
-		eventType:             "watch",
-		wantCloudEventSubject: testSubject,
+		eventType: "watch",
 	},
-}
-
-// mockTransport is a simple fake HTTP transport
-type mockTransport func(req *http.Request) (*http.Response, error)
-
-// RoundTrip implements the required RoundTripper interface for
-// mockTransport
-func (mt mockTransport) RoundTrip(req *http.Request) (*http.Response, error) {
-	return mt(req)
 }
 
 // TestAllCases runs all the table tests
@@ -454,46 +398,6 @@ func (tc *testCase) runner(t *testing.T, ra Adapter) func(t *testing.T) {
 			t.Error(err)
 		}
 	}
-}
-
-func (tc *testCase) handleRequest(req *http.Request) (*http.Response, error) {
-
-	codec := cehttp.Codec{}
-
-	body, err := ioutil.ReadAll(req.Body)
-	if err != nil {
-		return nil, err
-	}
-	msg := &cehttp.Message{
-		Header: req.Header,
-		Body:   body,
-	}
-
-	event, err := codec.Decode(context.Background(), msg)
-	if err != nil {
-		return nil, fmt.Errorf("unexpected error decoding cloudevent: %s", err)
-	}
-
-	if tc.wantCloudEventType != "" && tc.wantCloudEventType != event.Type() {
-		return nil, fmt.Errorf("want cloud event type %s, got %s",
-			tc.wantCloudEventType, event.Type())
-	}
-
-	gotSource := event.Source()
-	if testSource != gotSource {
-		return nil, fmt.Errorf("want source %s, got %s", testSource, gotSource)
-	}
-
-	gotSubject := event.Context.GetSubject()
-	if tc.wantCloudEventSubject != "" && tc.wantCloudEventSubject != gotSubject {
-		return nil, fmt.Errorf("want subject %s, got %s", tc.wantCloudEventSubject, gotSubject)
-	}
-
-	return &http.Response{
-		StatusCode: 200,
-		Body:       ioutil.NopCloser(bytes.NewBufferString("")),
-		Header:     make(http.Header),
-	}, nil
 }
 
 func (tc *testCase) verifyErr(err error) error {
@@ -573,7 +477,7 @@ func TestHandleEvent(t *testing.T) {
 	header := http.Header{}
 	header.Set("X-"+GHHeaderEvent, eventType)
 	header.Set("X-"+GHHeaderDelivery, eventID)
-	ra.HandleEvent(payload, http.Header(header))
+	ra.HandleEvent(payload, header)
 
 	// TODO(https://knative.dev/pkg/issues/250): clean this up when there is a shared test client.
 
@@ -616,10 +520,6 @@ func (h *fakeHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 func sinkAccepted(writer http.ResponseWriter, req *http.Request) {
 	writer.WriteHeader(http.StatusOK)
-}
-
-func sinkRejected(writer http.ResponseWriter, _ *http.Request) {
-	writer.WriteHeader(http.StatusRequestTimeout)
 }
 
 func canonicalizeHeaders(rvs ...requestValidation) {
